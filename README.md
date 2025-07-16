@@ -551,13 +551,19 @@ This work is licensed under the [MIT License](/LICENSE).
 ## Plain text
 
 ```
-
+Basak, S., Pal, A. and Bhattacherjee, D., 2025. {LEOCraft}: Towards Designing Performant {LEO} Networks. In 2025 USENIX Annual Technical Conference (USENIX ATC 25) (pp. 789-813).
 ```
 
 ## BibTeX
 
 ```bibtex
-
+@inproceedings{LEOCraft,
+  title={$\{$LEOCraft$\}$: Towards Designing Performant $\{$LEO$\}$ Networks},
+  author={Basak, Suvam and Pal, Amitangshu and Bhattacherjee, Debopam},
+  booktitle={2025 USENIX Annual Technical Conference (USENIX ATC 25)},
+  pages={789--813},
+  year={2025}
+}
 ```
 
 

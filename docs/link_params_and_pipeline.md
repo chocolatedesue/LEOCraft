@@ -1,0 +1,22 @@
+# Link Parameters & Pipeline Guide
+
+## How Link Parameters Are Calculated
+- **ISL Distance & Capacity** – When each shell builds inter-satellite links, `LEOSatelliteTopology.distance_between_sat_m()` returns true line-of-sight separation for the current `time_delta`. `Constellation._add_ISLs_from_shell()` stores that value as the edge `weight` and enforces the shell’s max ISL length. Capacity is a constant `Constellation.ISL_CAPACITY` (50 Gbps by default) applied uniformly to every ISL, ensuring the linear program can cap total load per edge.
+- **GSL Distance** – During `Constellation.build()` each ground station enumerates visible satellites, recording the precise range (meters) in `gsls`. Whenever `connect_ground_station()` attaches a GSL to the NetworkX graph, that same range becomes the edge `weight` so routing and stretch metrics always reflect geometry.
+- **GSL Capacity Without a Loss Model** – If no attenuation model is supplied, LEOCraft splits the nominal `GSL_CAPACITY` (20 Gbps) across the number of ground stations concurrently served by the satellite. For example, if `sat_coverage[S42]` currently shadows four terminals, each associated GSL receives `round(20 / 4) = 5` Gbps.
+- **GSL Capacity With FSPL** – When `Constellation.set_loss_model(FSPL(...))` is used, capacity becomes fully physics-driven. `FSPL.data_rate_bps(distance_m, partition)` first computes free-space path loss from the distance, converts transmit and receive antenna gains into SNR using the G/T ratio, then applies Shannon capacity `C = B·log2(1+SNR)` with the bandwidth divided by `partition` (the number of ground stations simultaneously handled by that satellite). The resulting bit rate is converted to Gbps and stored as edge capacity.
+- **Why Partition Matters** – Both the simple splitter and the FSPL model reduce per-link throughput as more terminals share the same satellite, capturing fanout contention without rebuilding routes.
+
+## Fast Pipeline Walkthrough
+1. **Set Up the Environment** – From repo root run `conda env create -f tools/environment.yml`, then `conda activate leocraft`. Export the project path with `export PYTHONPATH=$(pwd)` so modules resolve in-place.
+2. **Pick Scenario Ingredients** – Choose a ground-station dataset (`GroundStationAtCities.TOP_100`, etc.), traffic matrix from `InternetTrafficAcrossCities`, the shell topology configs (orbit count, satellites/orbit, altitude, inclination), and decide whether to use FSPL for dynamic GSL rates.
+3. **Assemble the Constellation** – Instantiate `LEOConstellation`, add ground stations and shells, optionally call `set_time()` for the epoch offset, configure the loss model, then invoke `build()` followed by `create_network_graph()`.
+4. **Precompute Routes** – Call `generate_routes()` to produce K-shortest paths (default 20) between every ground-station pair and populate `link_load`. This step can run in parallel—set `PARALLEL_MODE=True` at construction when dealing with large station sets.
+5. **Run Performance Metrics** – For throughput, create `Throughput(leo_con, InternetTrafficAcrossCities.ONLY_POP_100)` (or another matrix), then call `build()` and `compute()` to solve the multi-commodity LP via Gurobi. Follow with `Coverage(leo_con)` and `Stretch(leo_con)` if you need coverage and latency metrics.
+6. **Automate With Simulator (Optional)** – To sweep multiple constellations, use a simulator subclass: enqueue each prepared constellation via `add_constellation()`, run `simulate_in_parallel()` to execute build → route → throughput/coverage/stretch, and inspect the emitted CSV for comparative stats.
+7. **Export Artifacts** – Use helpers such as `leo_con.export_routes()`, `th.export_path_selection()`, or `sth.export_stretch_dataset()` (see `examples/example_starlink.py`) to capture data for visualization notebooks in `docs/visuals/` or for offline audits.
+
+## Tips for Quick Iteration
+- Keep an eye on `sat_coverage` fanout: dialing down shell density or limiting ground-station sets speeds up both the visibility scan and LP solve.
+- If Gurobi is unavailable, you can still test build/routing logic; just stub throughput runs and focus on `Coverage`/`Stretch` outputs until the solver license is installed.
+- For quick sanity checks, run `python examples/example_starlink.py`—it wires every stage of the pipeline, prints throughput/coverage/stretch results, and saves outputs under `./Starlink` by default.
